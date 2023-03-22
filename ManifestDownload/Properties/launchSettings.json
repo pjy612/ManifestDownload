@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "GitDownload": {
+      "commandName": "Project",
+      "commandLineArgs": "[wizard]"
+    }
+  }
+}
