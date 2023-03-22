@@ -1,9 +1,13 @@
-﻿using System.Reflection.Metadata;
+﻿using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Net;
+using System.Reflection.Metadata;
 using System.Text;
 using CommandDotNet;
 using CommandDotNet.NameCasing;
 using Microsoft.Extensions.Configuration;
 using Octokit;
+using Octokit.Caching;
 using Octokit.Internal;
 using PPlus;
 using PPlus.CommandDotNet;
@@ -19,22 +23,69 @@ namespace GitDownload
         const string tokenKey = "GitHubToken";
         private static Repository repo;
         private static GitHubClient github;
+        private static RateLimit limit;
 
-        static Task Init()
+        static async Task<bool> Init()
         {
-            PromptPlus.WaitProcess("获取远程清单仓库")
-                .AddProcess(new SingleProcess(async t =>
+            try
+            {
+                github = new GitHubClient(new ProductHeaderValue("SteamDepotDownload"));
+                string token = Config[tokenKey];
+                if (!string.IsNullOrWhiteSpace(token))
                 {
-                    github = new GitHubClient(new ProductHeaderValue("SteamDepotDownload"));
-                    string token = Config[tokenKey];
-                    if (!string.IsNullOrWhiteSpace(token))
+                    //github.Credentials = new Credentials(token);
+                }
+                MiscellaneousRateLimit rateLimit = await github.RateLimit.GetRateLimits();
+                limit = rateLimit.Rate;
+                PromptPlus.WriteLine($"当前可用请求数：{limit.Remaining}");
+                PromptPlus.WriteLine($"重置时间:[cyan]{limit.Reset.LocalDateTime}");
+                if (limit.Remaining == 0)
+                {
+                    PromptPlus.WriteLine($"当前请求已达到上限，请等待重置后再试。重置时间:[cyan]{limit.Reset.LocalDateTime}");
+                    if (limit.Limit <= 60)
                     {
-                        github.Credentials = new Credentials(token);
+                        PromptPlus.WriteLine($"可以在GitHub生成空权限的Person Token，配置到 appsettings.json 中 提高可请求上限。");
                     }
-                    repo = await github.Repository.Get(repoOwner, repoName);
-                    return "Done";
-                })).Run();
-            return Task.CompletedTask;
+                    return false;
+                }
+
+                ResultPromptPlus<IEnumerable<ResultProcess>> result = PromptPlus.WaitProcess("获取远程清单仓库")
+                    .AddProcess(new SingleProcess(async t =>
+                    {
+                        try
+                        {
+                            Repository repository = await github.Repository.Get(repoOwner, repoName);
+                            return repository;
+                        }
+                        catch (Exception e)
+                        {
+                            return e;
+                        }
+                    }, processTextResult: (o) => o is Repository ? "Done" : "Error"))
+                    .Run();
+                ResultProcess process = result.Value.First();
+                if (process.ValueProcess is Repository r)
+                {
+                    repo = r;
+                }
+                else if (process.ValueProcess is RateLimitExceededException re)
+                {
+                    PromptPlus.WriteLine($"当前请求已达到上限，请等待重置后再试。重置时间:[cyan]{re.Reset.LocalDateTime}");
+                    if (re.Limit <= 60)
+                    {
+                        PromptPlus.WriteLine($"可以在GitHub生成空权限的Person Token，配置到 appsettings.json 中 提高可请求上限。");
+                    }
+                }
+                else if (process.ValueProcess is Exception e)
+                {
+                    throw e;
+                }
+            }
+            catch (Exception e)
+            {
+                PromptPlus.WriteLine(e.Message.Red());
+            }
+            return repo != null;
         }
 
         static async Task<int> Main(string[] args)
@@ -65,10 +116,12 @@ namespace GitDownload
             [Positional("appid", Description = "list of appIds")]
             params string[] appIds)
         {
-            await Init();
-            foreach (string appId in appIds.Where(r => !string.IsNullOrWhiteSpace(r)).Select(r => r.Trim()))
+            if (await Init())
             {
-                await github.DownloadAllByAppid(repo.Id, appId);
+                foreach (string appId in appIds.Where(r => !string.IsNullOrWhiteSpace(r)).Select(r => r.Trim()))
+                {
+                    await github.DownloadAllByAppid(repo.Id, appId);
+                }
             }
         }
 
@@ -85,9 +138,11 @@ namespace GitDownload
             [Positional("manifestId", Description = "list of manifestIds")]
             params string[] manifestIds)
         {
-            await Init();
-            Task[] array = manifestIds.Where(r => !string.IsNullOrWhiteSpace(r)).Select(r => r.Trim()).Select(manifestId => github.DownloadAllByManifest(repo.Id, manifestId)).ToArray();
-            Task.WaitAll(array);
+            if (await Init())
+            {
+                Task[] array = manifestIds.Where(r => !string.IsNullOrWhiteSpace(r)).Select(r => r.Trim()).Select(manifestId => github.DownloadAllByManifest(repo.Id, manifestId)).ToArray();
+                Task.WaitAll(array);
+            }
         }
 
         private static IConfigurationRoot Config => GetSetting();
@@ -135,6 +190,13 @@ namespace GitDownload
             catch (Exception e)
             {
                 PromptPlus.WriteLine($"[red]下载出错[/] AppId:[cyan]{appid}\n[red]{e.Message}");
+                if (e is RateLimitExceededException re)
+                {
+                    if (re.Limit <= 60)
+                    {
+                        PromptPlus.WriteLine($"可以在GitHub生成空权限的Person Token，配置到 appsettings.json 中 提高可请求上限。");
+                    }
+                }
             }
         }
 
@@ -181,6 +243,13 @@ namespace GitDownload
                 catch (Exception e)
                 {
                     PromptPlus.WriteLine($"下载出错:{manifestId} {e.Message}", ConsoleColor.Red);
+                    if (e is RateLimitExceededException re)
+                    {
+                        if (re.Limit <= 60)
+                        {
+                            PromptPlus.WriteLine($"可以在GitHub生成空权限的Person Token，配置到 appsettings.json 中 提高可请求上限。");
+                        }
+                    }
                 }
             }
         }
