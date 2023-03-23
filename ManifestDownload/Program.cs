@@ -33,7 +33,7 @@ namespace GitDownload
                 string token = Config[tokenKey];
                 if (!string.IsNullOrWhiteSpace(token))
                 {
-                    //github.Credentials = new Credentials(token);
+                    github.Credentials = new Credentials(token);
                 }
                 MiscellaneousRateLimit rateLimit = await github.RateLimit.GetRateLimits();
                 limit = rateLimit.Rate;
@@ -220,6 +220,7 @@ namespace GitDownload
         public static async Task DownloadAllByManifest(this GitHubClient github, long repoId, string manifestId)
         {
             string basePath = Path.Combine(depotcache);
+            Directory.CreateDirectory(basePath);
             //foreach (string manifestId in manifestIds)
             {
                 try
