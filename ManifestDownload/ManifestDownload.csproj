@@ -14,6 +14,7 @@
     <PackageReference Include="Octokit" Version="5.0.2" />
     <PackageReference Include="PromptPlus" Version="3.3.3" />
     <PackageReference Include="PromptPlusCommandDotNet" Version="1.0.0.333" />
+    <PackageReference Include="ValveKeyValue" Version="0.8.2.162" />
   </ItemGroup>
 
   <ItemGroup>

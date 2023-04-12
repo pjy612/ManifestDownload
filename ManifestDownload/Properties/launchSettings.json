@@ -2,7 +2,7 @@
   "profiles": {
     "GitDownload": {
       "commandName": "Project",
-      "commandLineArgs": "[wizard]"
+      "commandLineArgs": "dumpkey"
     }
   }
 }

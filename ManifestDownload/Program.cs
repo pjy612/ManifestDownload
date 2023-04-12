@@ -1,10 +1,12 @@
 ﻿using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Net;
 using System.Reflection.Metadata;
 using System.Text;
 using CommandDotNet;
 using CommandDotNet.NameCasing;
+using ManifestDownload;
 using Microsoft.Extensions.Configuration;
 using Octokit;
 using Octokit.Caching;
@@ -12,6 +14,7 @@ using Octokit.Internal;
 using PPlus;
 using PPlus.CommandDotNet;
 using PPlus.Objects;
+using ValveKeyValue;
 using Blob = Octokit.Blob;
 
 namespace GitDownload
@@ -29,6 +32,7 @@ namespace GitDownload
         {
             try
             {
+                PromptPlus.WriteLine($"获取请求阈值...");
                 github = new GitHubClient(new ProductHeaderValue("SteamDepotDownload"));
                 string token = Config[tokenKey];
                 if (!string.IsNullOrWhiteSpace(token))
@@ -118,10 +122,12 @@ namespace GitDownload
         {
             if (await Init())
             {
+                DepotKeyStore.LoadData();
                 foreach (string appId in appIds.Where(r => !string.IsNullOrWhiteSpace(r)).Select(r => r.Trim()))
                 {
                     await github.DownloadAllByAppid(repo.Id, appId);
                 }
+                DepotKeyStore.Save();
             }
         }
 
@@ -145,6 +151,58 @@ namespace GitDownload
             }
         }
 
+        [Command("dumpkey",
+            IgnoreUnexpectedOperands = true,
+            Description = "dump all DecryptionKey to keys.txt",
+            UsageLines = new[]
+            {
+                "dumpkey"
+            })]
+        public async Task DumpKey()
+        {
+            DepotKeyStore.LoadData();
+            string[] allVdf = Directory.GetFiles("depotcache","*.vdf",SearchOption.AllDirectories);
+            foreach (var p in allVdf)
+            {
+                DumpForVdf(p);
+            }
+            DepotKeyStore.Save();
+        }
+        static KVSerializer kv = KVSerializer.Create(KVSerializationFormat.KeyValues1Text);
+        static void DumpForVdf(string path)
+        {
+            PromptPlus.WriteLine($"Dumping: [cyan]{path}");
+            DumpForVdf(File.OpenRead(path));
+        }
+        public static void DumpForVdf(byte[] bytes)
+        {
+            DumpForVdf(new MemoryStream(bytes));
+        }
+        static void DumpForVdf(Stream stream)
+        {
+            try
+            {
+                KVObject depots = kv.Deserialize(stream);
+                if (depots.Name == "depots")
+                {
+                    foreach (KVObject depot in depots.Children)
+                    {
+                        string depotName = depot.Name;
+                        uint depotId = uint.Parse(depotName);
+                        if (!DepotKeyStore.LocalKeys.ContainsKey(depotId))
+                        {
+                            var DecryptionKey = depot.Value["DecryptionKey"].ToString();
+                            DepotKeyStore.LocalKeys[depotId] = DecryptionKey;
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                PromptPlus.WriteLine(e);
+            }
+        }
+
         private static IConfigurationRoot Config => GetSetting();
 
         static IConfigurationRoot GetSetting()
@@ -154,6 +212,8 @@ namespace GitDownload
                 .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
             return builder.Build();
         }
+
+        
     }
 
     static class GitHubClientExtension
@@ -175,14 +235,27 @@ namespace GitDownload
 
                 foreach (TreeItem treeItem in tree.Tree)
                 {
+                    string fullPath = Path.Combine(basePath, treeItem.Path);
+                    if (treeItem.Path.EndsWith(".manifest"))
+                    {
+                        if (Directory.EnumerateFiles(depotcache, treeItem.Path, SearchOption.AllDirectories).Any())
+                        {
+                            PromptPlus.WriteLine($"已存在:[cyan]{treeItem.Path}");
+                            continue;
+                        }
+                    }
                     if (treeItem.Type.Value == TreeType.Blob)
                     {
                         Blob blob = await github.Git.Blob.Get(repoId, treeItem.Sha);
                         byte[] bytes = blob.GetContent();
                         if (bytes.Any())
                         {
+                            if (treeItem.Path.EndsWith(".vdf"))
+                            {
+                                Program.DumpForVdf(bytes);
+                            }
                             PromptPlus.WriteLine($"下载完毕:[cyan]{treeItem.Path}");
-                            await File.WriteAllBytesAsync(Path.Combine(basePath, treeItem.Path), bytes);
+                            await File.WriteAllBytesAsync(fullPath, bytes);
                         }
                     }
                 }
@@ -236,7 +309,8 @@ namespace GitDownload
                             if (bytes.Any())
                             {
                                 PromptPlus.WriteLine($"下载完毕:[cyan]{treeItem.Path}");
-                                await File.WriteAllBytesAsync(Path.Combine(basePath, treeItem.Path), bytes);
+                                string filePath = Path.Combine(basePath, treeItem.Path);
+                                await File.WriteAllBytesAsync(filePath, bytes);
                             }
                         }
                     }
