@@ -94,8 +94,9 @@ namespace GitDownload
 
         static async Task<int> Main(string[] args)
         {
+            Console.Title = "ManifestDownload By pjy612";
             PromptPlus.Banner("ManifestDownload").Run(ConsoleColor.Green);
-            PromptPlus.WriteLine("By [cyan]pjy612");
+            PromptPlus.WriteLine("By [cyan]pjy612[/] [yellow]免费软件，请勿用于商业或非法用途");
             return await new AppRunner<Program>()
                 .UseDefaultMiddleware()
                 .UseNameCasing(Case.CamelCase)
