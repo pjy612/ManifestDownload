@@ -34,7 +34,7 @@ https://steamdb.info/app/1196590/
 **Ps.该软件本身没啥技术含量，但是为避免被修改文案后沦为 X宝 X鱼 的牟利工具，会简单加个壳。**
 
 ### 工具参数
-```shell
+```dos
 ::根据appid 下载资源清单
 ManifestDownload.exe app [appid1 appid2]
 ManifestDownload.exe app 1000
@@ -50,7 +50,11 @@ ManifestDownload.exe dumpkey
 
 ## DepotDownloader（魔改） Steam资源下载器
 ### 工具运行图
-
+![](d1.png)
+![](d2.png)
+![](d3.png)
+![](d4.png)
+![](d5.png)
 ### 工具说明
 本工具魔改自 **[SteamRE/DepotDownloader](https://github.com/SteamRE/DepotDownloader)**  
 加了一些便捷功能，比如
@@ -69,6 +73,38 @@ ManifestDownload.exe dumpkey
 **Ps.该软件虽然是魔改且上游开源协议为GPL2，但是为避免被修改文案后沦为 X宝 X鱼 的牟利工具，会简单加个壳。**
 
 ### 工具参数（含魔改后新特性）
-```shell
+```cmd
+:: 免登录模式
+::下载游戏的所有内容到 默认目录（默认会根据 depot 分别构建目录存放）
+DepotDownloader.exe -app 904320
+::下载游戏的 指定 depot 内容  到默认目录（默认会根据 depot 分别构建目录存放）
+DepotDownloader.exe -app 904320 -depot 994710 904321
 
+:: 【新特性】自动根据 appid 存放资源，会将资源全部放在 apps/appid 目录下
+DepotDownloader.exe -useAppDir -app 338930
+
+::下载游戏的所有内容到某个目录
+DepotDownloader.exe -app 904320 -dir E:/GameName
+::下载游戏的 指定 depot 内容 到某个目录
+DepotDownloader.exe -app 904320 -depot 994710 904321 -dir E:/GameName
+
+::通过指定清单下载游戏 (清单文件要放到 当前程序的 depotcache 内) depotId 和 manifestId 要一一对应
+DepotDownloader.exe -app 534380 -depot 534381 -manifest 3462017367423786531 -useAppDir
+DepotDownloader.exe -app 338930 -depot 338931 338932 347970 359000 359001 -manifest 1547401116504413409 3145636846994837120 7699221664155927697 2868566071607167109 761387674804236811 -useAppDir
+
+::登录模式
+::[新特性]通过账号和密码 还有 ssfn 登录 并下载游戏 (ssfn文件要放到当前程序目录)
+DepotDownloader.exe -user 账号 -pass 密码 -ssfn ssfnxxxxxx -app 904320 -depot 994710 904321 -useAppDir
+
+::登陆但是只获取 下载密钥和清单
+DepotDownloader.exe -user 账号 -pass 密码 -ssfn ssfnxxxxx -app 904320 -manifest-only
+
+::[新特性]只获取游戏清单信息 并尝试生成解密清单(位于depotcache_decrypt目录) (解密清单应该可以支持无密钥下载游戏)
+DepotDownloader.exe -user 账号 -pass 密码 -ssfn ssfnxxxxxxxxxxxxxx -app 904320 -manifest-only -dm
+
+::[新特性]额外指定的cdn
+DepotDownloader.exe -app 904320 -cdn steampipe.akamaized.net:80,trts.baishancdnx.cn:80
+
+::[新特性]强制通过depotid下载（有的游戏 app有请求限制 导致无法自动获取 depot 列表）
+DepotDownloader.exe -app 338930 -depot 338931 338932 347970 359000 359001 -forceDepot
 ```
