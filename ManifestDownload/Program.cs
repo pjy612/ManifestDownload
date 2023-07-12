@@ -21,8 +21,8 @@ namespace GitDownload
 {
     internal class Program
     {
-        const string repoOwner = "wxy1343";
-        const string repoName = "ManifestAutoUpdate";
+        static string repoOwner = "wxy1343";
+        static string repoName = "ManifestAutoUpdate";
         const string tokenKey = "GitHubToken";
         private static Repository repo;
         private static GitHubClient github;
@@ -35,6 +35,14 @@ namespace GitDownload
                 PromptPlus.WriteLine($"获取请求阈值...");
                 github = new GitHubClient(new ProductHeaderValue("SteamDepotDownload"));
                 string token = Config[tokenKey];
+                if (!string.IsNullOrWhiteSpace(Config[nameof(repoOwner)]))
+                {
+                    repoOwner = Config[nameof(repoOwner)];
+                }
+                if (!string.IsNullOrWhiteSpace(Config[nameof(repoName)]))
+                {
+                    repoName = Config[nameof(repoName)];
+                }
                 if (!string.IsNullOrWhiteSpace(token))
                 {
                     github.Credentials = new Credentials(token);
